@@ -11,8 +11,6 @@ function generateTitles(){
         let sd = day.substring(0,3).toLowerCase();
         let am_param = `${sd}_am`;
         let pm_param = `${sd}_pm`;
-        console.log(getCookie(am_param));
-        console.log(getCookie(pm_param));
         titles[am_param] = (PARAMS.has(am_param)) ? PARAMS.get(am_param) : (getCookie(am_param)) ? getCookie(am_param) : `${day} Morning Livestream`;
         titles[pm_param] = (PARAMS.has(pm_param)) ? PARAMS.get(pm_param) : (getCookie(pm_param)) ? getCookie(pm_param) : `${day} Evening Livestream`;
     });
@@ -43,6 +41,13 @@ function setCookie( name, value, expires, path, domain, secure ) {
         ( ( path ) ? ";path=" + path : "" ) +
         ( ( domain ) ? ";domain=" + domain : "" ) +
         ( ( secure ) ? ";secure" : "" );
+}
+
+function deleteCookie( name, path, domain ) {
+    if ( getCookie( name ) ) document.cookie = name + "=" +
+        ( ( path ) ? ";path=" + path : "") +
+        ( ( domain ) ? ";domain=" + domain : "" ) +
+        ";expires=Thu, 01-Jan-1970 00:00:01 GMT";
 }
 
 function copy(obj) {
@@ -82,6 +87,14 @@ function save(){
     editor.style.display = "none";
     PARAMS.delete("editor");
     location.search = `?${PARAMS.toString()}`
+}
+
+function reset(){
+    let titles = generateTitles();
+    for (var t in titles){
+        deleteCookie(t);
+    }
+    location.reload();
 }
 
 function edit(){
@@ -127,6 +140,7 @@ function main(){
             <table id="editor_table">
             </table>
             <button id="btn_save" type="button" onclick="save();">SAVE</button>
+            <button id="btn_reset" type="button" onclick="reset();">RESET</button>
         </div>
         <button id="btn_edit" type="button" onclick="edit();">EDIT</button>
     </body>
