@@ -77,29 +77,49 @@ function selectFade(obj){
     })();
 }
 
-function save(){
+function save(reload=true){
     document.querySelectorAll(".editor_row").forEach(function(e){
         var key = e.querySelector(".e_key").innerText;
         var value = e.querySelector(".e_value").value;
         setCookie(key, value);
+        PARAMS.set(key, value);
     });
     var editor = document.querySelector("#editor");
-    editor.style.display = "none";
-    PARAMS.delete("editor");
+    if (reload){
+        editor.style.display = "none";
+        PARAMS.delete("editor");
+        location.search = `?${PARAMS.toString()}`
+    }
+}
+
+function edit(){
+    PARAMS.append("editor","");
     location.search = `?${PARAMS.toString()}`
 }
 
 function reset(){
     let titles = generateTitles();
     for (var t in titles){
+        PARAMS.delete(t);
         deleteCookie(t);
     }
-    location.reload();
+    location.search = PARAMS.toString();
 }
 
-function edit(){
-    PARAMS.append("editor","");
-    location.search = `?${PARAMS.toString()}`
+function copy_link(obj){
+    save(false);
+    let titles = generateTitles();
+    for (var t in titles){
+        PARAMS.set(t, titles[t]);
+    }
+    var new_url = `${location.href.slice(location.search)}?${PARAMS.toString()}`;
+    var temp_span = document.createElement("span");
+    temp_span.innerText = new_url;
+    document.body.appendChild(temp_span);
+    copy(temp_span);
+    selectFade(obj);
+    document.body.removeChild(temp_span);
+    temp_span = null;
 }
 
 function main(){
@@ -139,6 +159,7 @@ function main(){
         <div id="editor" style="display:none;">
             <table id="editor_table">
             </table>
+            <span id="permalink" onclick="copy_link(this);">PERMALINK (click to copy)</span><br>
             <button id="btn_save" type="button" onclick="save();">SAVE</button>
             <button id="btn_reset" type="button" onclick="reset();">RESET</button>
         </div>
