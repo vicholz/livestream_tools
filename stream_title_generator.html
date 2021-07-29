@@ -1,9 +1,9 @@
 <html>
     <head>
         <title>TITLES</title>
-        <script type="text/javascript">
+        <script>
 let WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-let PARAMS = new URLSearchParams(location.href.split("?").pop());
+let PARAMS = new URLSearchParams(location.search.slice(1));
 
 function generateTitles(){
     let titles = {};
@@ -11,10 +11,38 @@ function generateTitles(){
         let sd = day.substring(0,3).toLowerCase();
         let am_param = `${sd}_am`;
         let pm_param = `${sd}_pm`;
-        titles[am_param] = (PARAMS.has(am_param)) ? PARAMS.get(am_param) : `${day} Morning Livestream`;
-        titles[pm_param] = (PARAMS.has(pm_param)) ? PARAMS.get(pm_param) : `${day} Evening Livestream`;
+        console.log(getCookie(am_param));
+        console.log(getCookie(pm_param));
+        titles[am_param] = (PARAMS.has(am_param)) ? PARAMS.get(am_param) : (getCookie(am_param)) ? getCookie(am_param) : `${day} Morning Livestream`;
+        titles[pm_param] = (PARAMS.has(pm_param)) ? PARAMS.get(pm_param) : (getCookie(pm_param)) ? getCookie(pm_param) : `${day} Evening Livestream`;
     });
     return titles;
+}
+
+function getCookie( name ) {
+    var start = document.cookie.indexOf( name + "=" );
+    var len = start + name.length + 1;
+    if ( ( !start ) && ( name != document.cookie.substring( 0, name.length ) ) ) {
+        return null;
+    }
+    if ( start == -1 ) return null;
+    var end = document.cookie.indexOf( ";", len );
+    if ( end == -1 ) end = document.cookie.length;
+    return unescape( document.cookie.substring( len, end ) );
+}
+
+function setCookie( name, value, expires, path, domain, secure ) {
+    var today = new Date();
+    today.setTime( today.getTime() );
+    if ( expires ) {
+        expires = expires * 1000 * 60 * 60 * 24;
+    }
+    var expires_date = new Date( today.getTime() + (expires) );
+    document.cookie = name+"="+escape( value ) +
+        ( ( expires ) ? ";expires="+expires_date.toGMTString() : "" ) + //expires.toGMTString()
+        ( ( path ) ? ";path=" + path : "" ) +
+        ( ( domain ) ? ";domain=" + domain : "" ) +
+        ( ( secure ) ? ";secure" : "" );
 }
 
 function copy(obj) {
@@ -44,6 +72,23 @@ function selectFade(obj){
     })();
 }
 
+function save(){
+    document.querySelectorAll(".editor_row").forEach(function(e){
+        var key = e.querySelector(".e_key").innerText;
+        var value = e.querySelector(".e_value").value;
+        setCookie(key, value);
+    });
+    var editor = document.querySelector("#editor");
+    editor.style.display = "none";
+    PARAMS.delete("editor");
+    location.search = `?${PARAMS.toString()}`
+}
+
+function edit(){
+    PARAMS.append("editor","");
+    location.search = `?${PARAMS.toString()}`
+}
+
 function main(){
     let d = new Date();
 
@@ -56,6 +101,17 @@ function main(){
 
     let titles = generateTitles();
 
+    if (PARAMS.has("editor")){
+        for (var t in titles){
+            var tr = document.createElement("tr");
+            tr.classList = "editor_row";
+            tr.innerHTML = `<td><span class="e_key">${t}</span></td><td><input class="e_value" id="${t}" name="${t}" type="text" value="${titles[t]}" size=50/></td>`
+            document.querySelector("#editor_table").appendChild(tr);
+        };
+        document.querySelector("#editor").style.display = "block";
+        document.querySelector("#btn_edit").style.display = "none";
+    }
+
     let day_key = (d.getHours() < 12) ? `${WEEKDAYS[d.getDay()].substring(0,3).toLowerCase()}_am` : `${WEEKDAYS[d.getDay()].substring(0,3).toLowerCase()}_pm`;
 
     title_span.innerText = `${d.getFullYear()}/${('0' + (d.getMonth()+1)).slice(-2)}/${('0' + d.getDate()).slice(-2)} - ${titles[day_key]}`;
@@ -63,7 +119,15 @@ function main(){
         </script>
     </head>
     <body onload="main()">
-        <span style="font-size: 28pt;" id="title"></span><br>
-        <span>(CLICK THE TITLE TO COPY IT)</span>
+        <div>
+            <span style="font-size: 28pt;" id="title"></span><br>
+            <span>(CLICK THE TITLE TO COPY IT)</span>
+        </div>
+        <div id="editor" style="display:none;">
+            <table id="editor_table">
+            </table>
+            <button id="btn_save" type="button" onclick="save();">SAVE</button>
+        </div>
+        <button id="btn_edit" type="button" onclick="edit();">EDIT</button>
     </body>
 </html>
