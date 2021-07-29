@@ -1,7 +1,7 @@
 # Livestream Tools
 ---
 
-## [Livestream Title Generator](https://vicholz.github.io/viewhtml.html#https://raw.githubusercontent.com/vicholz/livestream_tools/main/stream_title_generator.html)
+## Livestream Title Generator
 Generates livestream titles with date/title with settable name by day.
 
 ### Usage
