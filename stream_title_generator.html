@@ -1,0 +1,72 @@
+<html>
+    <head>
+        <title>TITLES</title>
+        <script>
+let WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+let PARAMS = new URLSearchParams(location.href.split("?").pop());
+console.log(PARAMS.entries())
+
+function generateTitles(){
+    let titles = {};
+    WEEKDAYS.forEach(function (day){
+        let sd = day.substring(0,3).toLowerCase();
+        let am_param = `${sd}_am`;
+        let pm_param = `${sd}_pm`;
+        titles[am_param] = (PARAMS.has(am_param)) ? PARAMS.get(am_param) : `${day} Morning Livestream`;
+        titles[pm_param] = (PARAMS.has(pm_param)) ? PARAMS.get(pm_param) : `${day} Evening Livestream`;
+        console.log(location.href)
+        console.log(PARAMS.get(pm_param))
+    });
+    return titles;
+}
+
+function copy(obj) {
+    var range = document.createRange();
+    var selection = window.getSelection();
+    range.selectNodeContents(obj);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+        var successful = document.execCommand('copy');
+        var msg = successful ? 'successful' : 'unsuccessful';
+        console.log('Copy command was ' + msg);
+    } catch(err) {
+        console.log('Oops, unable to copy');
+    }
+    window.getSelection().removeAllRanges();
+}
+
+function selectFade(obj){
+    var opacity = 1.0;
+    (function (){
+        var fadeTimer = setInterval(function(){
+            opacity -= 0.1;
+            obj.style.backgroundColor = "rgba(0, 255, 0, " + opacity + ")";
+            if (opacity <= 0) clearInterval(fadeTimer);
+        },50);
+    })();
+}
+
+function main(){
+    let d = new Date();
+
+    title_span = document.querySelector("#title")
+    title_span.addEventListener("click", function(e){
+        selectFade(this);
+        copy(this);
+        document.body.removeChild(s);
+    });
+
+    let titles = generateTitles();
+
+    let day_key = (d.getHours() < 12) ? `${WEEKDAYS[d.getDay()].substring(0,3).toLowerCase()}_am` : `${WEEKDAYS[d.getDay()].substring(0,3).toLowerCase()}_pm`;
+
+    title_span.innerText = `${d.getFullYear()}/${('0' + (d.getMonth()+1)).slice(-2)}/${('0' + d.getDate()).slice(-2)} - ${titles[day_key]}`;
+}
+        </script>
+    </head>
+    <body onload="main()">
+        <span style="font-size: 28pt;" id="title"></span><br>
+        <span>(CLICK THE TITLE TO COPY IT)</span>
+    </body>
+</html>
