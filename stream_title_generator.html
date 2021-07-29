@@ -4,7 +4,6 @@
         <script type="text/javascript">
 let WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 let PARAMS = new URLSearchParams(location.href.split("?").pop());
-console.log(PARAMS.entries())
 
 function generateTitles(){
     let titles = {};
@@ -14,8 +13,6 @@ function generateTitles(){
         let pm_param = `${sd}_pm`;
         titles[am_param] = (PARAMS.has(am_param)) ? PARAMS.get(am_param) : `${day} Morning Livestream`;
         titles[pm_param] = (PARAMS.has(pm_param)) ? PARAMS.get(pm_param) : `${day} Evening Livestream`;
-        console.log(location.href)
-        console.log(PARAMS.get(pm_param))
     });
     return titles;
 }
