@@ -114,7 +114,7 @@ function copy_link(obj){
     }
     PARAMS.delete("editor");
     var new_url = `${location.href.slice(location.search)}?${PARAMS.toString()}`;
-    new_url = new_url.replaceAll("editor=true","");
+    new_url = new_url.replaceAll(/\??editor(="?true"?)?/gi,"");
     var temp_span = document.createElement("span");
     temp_span.innerText = new_url;
     document.body.appendChild(temp_span);
