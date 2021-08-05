@@ -113,6 +113,7 @@ function copy_link(obj){
         PARAMS.set(t, titles[t]);
     }
     PARAMS.delete("editor");
+    PARAMS.delete("url");
     var new_url = `${location.href.slice(location.search)}?${PARAMS.toString()}`;
     var temp_span = document.createElement("span");
     temp_span.innerText = new_url;
