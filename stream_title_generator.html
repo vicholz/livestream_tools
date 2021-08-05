@@ -93,7 +93,7 @@ function save(reload=true){
 }
 
 function edit(){
-    PARAMS.append("editor","true");
+    PARAMS.set("editor","true");
     location.search = `?${PARAMS.toString()}`
 }
 
