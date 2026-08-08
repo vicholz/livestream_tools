@@ -1,170 +1,594 @@
-<html>
-    <head>
-        <title>TITLES</title>
-        <script>
-let WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-let PARAMS = new URLSearchParams(location.search.slice(1));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stream Titles</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-2: #eef1f4;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --muted: #656d76;
+      --accent: #0969da;
+      --accent-fg: #ffffff;
+      --ok: #1a7f37;
+      --ok-bg: rgba(26, 127, 55, 0.18);
+      --danger: #cf222e;
+      --radius: 10px;
+      --shadow: 0 1px 2px rgba(31, 35, 40, 0.08);
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
 
-function generateTitles(){
-    let titles = {};
-    WEEKDAYS.forEach(function (day){
-        let sd = day.substring(0,3).toLowerCase();
-        let am_param = `${sd}_am`;
-        let pm_param = `${sd}_pm`;
-        titles[am_param] = (PARAMS.has(am_param)) ? PARAMS.get(am_param) : (getCookie(am_param)) ? getCookie(am_param) : `${day} Morning Livestream`;
-        titles[pm_param] = (PARAMS.has(pm_param)) ? PARAMS.get(pm_param) : (getCookie(pm_param)) ? getCookie(pm_param) : `${day} Evening Livestream`;
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #2f81f7;
+        --accent-fg: #ffffff;
+        --ok: #3fb950;
+        --ok-bg: rgba(63, 185, 80, 0.2);
+        --danger: #f85149;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 18px 48px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .section {
+      margin-bottom: 28px;
+    }
+
+    .section-label {
+      margin: 0 0 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .card.default {
+      border-left: 4px solid var(--accent);
+    }
+
+    .card.custom {
+      border-left: 4px solid var(--muted);
+    }
+
+    .title-text {
+      font-size: 1.25rem;
+      font-weight: 650;
+      word-break: break-word;
+      cursor: pointer;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin: -6px -8px 10px;
+      transition: background-color 0.35s ease;
+      user-select: text;
+    }
+
+    .title-text:hover {
+      background: var(--surface-2);
+    }
+
+    .title-text.copied {
+      background: var(--ok-bg);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin: 0 0 12px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button, .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover, .btn:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-fg);
+    }
+
+    button.danger {
+      color: var(--danger);
+    }
+
+    .editor {
+      display: none;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .editor.open { display: block; }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 0 0 6px;
+    }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      font: inherit;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      resize: vertical;
+    }
+
+    textarea { min-height: 72px; }
+
+    .token-help {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin: -4px 0 12px;
+    }
+
+    .token-help code {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Stream Titles</h1>
+    <p class="subtitle">Click a title to copy. Edits update the URL query string so you can bookmark or share presets.</p>
+
+    <section class="section" id="default-section">
+      <h2 class="section-label">Default</h2>
+      <div id="default-card"></div>
+    </section>
+
+    <section class="section" id="custom-section">
+      <h2 class="section-label">Custom titles</h2>
+      <div id="custom-list"></div>
+      <div class="actions">
+        <button type="button" id="add-custom">Add custom title</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+(function () {
+  'use strict';
+
+  var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+  var DEFAULT_DATE_FORMAT = 'YYYY/MM/DD';
+
+  function esc(val) {
+    return String(val == null ? '' : val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getParams() {
+    // Works for file:// and http(s):// — prefer location.search when present
+    var search = location.search;
+    if (!search && location.href.indexOf('?') !== -1) {
+      search = location.href.slice(location.href.indexOf('?'));
+    }
+    return new URLSearchParams(search.charAt(0) === '?' ? search : '?' + search);
+  }
+
+  function setParams(params) {
+    var qs = params.toString();
+    var base = location.href.split('?')[0].split('#')[0];
+    var next = qs ? base + '?' + qs : base;
+    if (next !== location.href) {
+      try {
+        history.replaceState(null, '', next);
+      } catch (e) {
+        // Some file:// contexts disallow replaceState — fall back to assign
+        location.replace(next);
+      }
+    }
+  }
+
+  function pad2(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  function formatDate(d, pattern) {
+    var map = {
+      YYYY: String(d.getFullYear()),
+      YY: String(d.getFullYear()).slice(-2),
+      MMMM: MONTHS[d.getMonth()],
+      MMM: MONTHS[d.getMonth()].slice(0, 3),
+      MM: pad2(d.getMonth() + 1),
+      M: String(d.getMonth() + 1),
+      DD: pad2(d.getDate()),
+      D: String(d.getDate()),
+      dddd: WEEKDAYS[d.getDay()],
+      ddd: WEEKDAYS[d.getDay()].slice(0, 3),
+      HH: pad2(d.getHours()),
+      H: String(d.getHours()),
+      mm: pad2(d.getMinutes()),
+      m: String(d.getMinutes()),
+      ss: pad2(d.getSeconds()),
+      s: String(d.getSeconds())
+    };
+    // Longest tokens first so MMMM wins over MM/M, dddd over ddd, etc.
+    return String(pattern).replace(/YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|HH|H|mm|m|ss|s/g, function (tok) {
+      return map[tok];
     });
-    return titles;
-}
+  }
 
-function getCookie( name ) {
-    var start = document.cookie.indexOf( name + "=" );
-    var len = start + name.length + 1;
-    if ( ( !start ) && ( name != document.cookie.substring( 0, name.length ) ) ) {
-        return null;
+  function timeOfDay(d) {
+    var h = d.getHours();
+    if (h < 12) return 'Morning';
+    if (h < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
+  // Northern-hemisphere meteorological seasons
+  function season(d) {
+    var m = d.getMonth();
+    if (m === 11 || m <= 1) return 'Winter';
+    if (m <= 4) return 'Spring';
+    if (m <= 7) return 'Summer';
+    return 'Fall';
+  }
+
+  function quarter(d) {
+    return String(Math.floor(d.getMonth() / 3) + 1);
+  }
+
+  // ISO-8601 week number
+  function weekNumber(d) {
+    var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    var dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  }
+
+  function builtInDefaultTemplate(d) {
+    // Preserve original Wednesday special-case when no default= override
+    if (d.getDay() === 3) {
+      return '${date} - ${weekday} Night Bible Study & Prayer';
     }
-    if ( start == -1 ) return null;
-    var end = document.cookie.indexOf( ";", len );
-    if ( end == -1 ) end = document.cookie.length;
-    return unescape( document.cookie.substring( len, end ) );
-}
+    return '${date} - ${weekday} ${time_of_day} Service';
+  }
 
-function setCookie( name, value, expires, path, domain, secure ) {
-    var today = new Date();
-    today.setTime( today.getTime() );
-    if ( expires ) {
-        expires = expires * 1000 * 60 * 60 * 24;
-    }
-    var expires_date = new Date( today.getTime() + (expires) );
-    document.cookie = name+"="+escape( value ) +
-        ( ( expires ) ? ";expires="+expires_date.toGMTString() : "" ) + //expires.toGMTString()
-        ( ( path ) ? ";path=" + path : "" ) +
-        ( ( domain ) ? ";domain=" + domain : "" ) +
-        ( ( secure ) ? ";secure" : "" );
-}
+  function expandTokens(template, params, d) {
+    var dateFormat = params.get('date_format') || DEFAULT_DATE_FORMAT;
+    var builtins = {
+      date: formatDate(d, dateFormat),
+      weekday: WEEKDAYS[d.getDay()],
+      weekday_short: WEEKDAYS[d.getDay()].slice(0, 3),
+      month: MONTHS[d.getMonth()],
+      month_short: MONTHS[d.getMonth()].slice(0, 3),
+      time_of_day: timeOfDay(d),
+      season: season(d),
+      week: String(weekNumber(d)),
+      quarter: quarter(d)
+    };
 
-function deleteCookie( name, path, domain ) {
-    if ( getCookie( name ) ) document.cookie = name + "=" +
-        ( ( path ) ? ";path=" + path : "") +
-        ( ( domain ) ? ";domain=" + domain : "" ) +
-        ";expires=Thu, 01-Jan-1970 00:00:01 GMT";
-}
-
-function copy(obj) {
-    var range = document.createRange();
-    var selection = window.getSelection();
-    range.selectNodeContents(obj);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    try {
-        var successful = document.execCommand('copy');
-        var msg = successful ? 'successful' : 'unsuccessful';
-        console.log('Copy command was ' + msg);
-    } catch(err) {
-        console.log('Oops, unable to copy');
-    }
-    window.getSelection().removeAllRanges();
-}
-
-function selectFade(obj){
-    var opacity = 1.0;
-    (function (){
-        var fadeTimer = setInterval(function(){
-            opacity -= 0.1;
-            obj.style.backgroundColor = "rgba(0, 255, 0, " + opacity + ")";
-            if (opacity <= 0) clearInterval(fadeTimer);
-        },50);
-    })();
-}
-
-function save(reload=true){
-    document.querySelectorAll(".editor_row").forEach(function(e){
-        var key = e.querySelector(".e_key").innerText;
-        var value = e.querySelector(".e_value").value;
-        setCookie(key, value);
-        PARAMS.set(key, value);
+    return String(template).replace(/\$\{([a-zA-Z0-9_]+)(?::([^}]+))?\}/g, function (_, name, fmt) {
+      if (name === 'date') {
+        return formatDate(d, fmt || dateFormat);
+      }
+      if (Object.prototype.hasOwnProperty.call(builtins, name)) {
+        return builtins[name];
+      }
+      // Any other query param is available as ${name}
+      var fromQs = params.get(name);
+      return fromQs != null ? fromQs : '';
     });
-    var editor = document.querySelector("#editor");
-    if (reload){
-        editor.style.display = "none";
-        PARAMS.delete("editor");
-        location.search = `?${PARAMS.toString()}`
+  }
+
+  function parseCustomTitles(params) {
+    var raw = params.get('custom_titles');
+    if (!raw) return [];
+    // Pipe-delimited; keep empty slots only if user intentionally left them
+    return raw.split('|');
+  }
+
+  function writeCustomTitles(params, titles) {
+    if (!titles.length) {
+      params.delete('custom_titles');
+    } else {
+      params.set('custom_titles', titles.join('|'));
     }
-}
+  }
 
-function edit(){
-    PARAMS.set("editor","true");
-    location.search = `?${PARAMS.toString()}`
-}
-
-function reset(){
-    let titles = generateTitles();
-    for (var t in titles){
-        PARAMS.delete(t);
-        deleteCookie(t);
+  function copyText(text, el) {
+    function flash() {
+      if (!el) return;
+      el.classList.add('copied');
+      setTimeout(function () { el.classList.remove('copied'); }, 700);
     }
-    location.search = PARAMS.toString();
-}
 
-function copy_link(obj){
-    save(false);
-    let titles = generateTitles();
-    for (var t in titles){
-        PARAMS.set(t, titles[t]);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash).catch(function () {
+        legacyCopy(text);
+        flash();
+      });
+      return;
     }
-    PARAMS.delete("editor");
-    var new_url = `${location.href.slice(location.search)}?${PARAMS.toString()}`;
-    new_url = new_url.replaceAll(/\??editor(="?true"?)?/gi,"");
-    var temp_span = document.createElement("span");
-    temp_span.innerText = new_url;
-    document.body.appendChild(temp_span);
-    copy(temp_span);
-    selectFade(obj);
-    document.body.removeChild(temp_span);
-    temp_span = null;
-}
+    legacyCopy(text);
+    flash();
+  }
 
-function main(){
-    let d = new Date();
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
 
-    title_span = document.querySelector("#title")
-    title_span.addEventListener("click", function(e){
-        selectFade(this);
-        copy(this);
-        document.body.removeChild(s);
+  function tokenHelpHtml() {
+    return (
+      '<p class="token-help">' +
+        'Tokens: <code>${date}</code>, <code>${date:YYYY/MM/DD}</code>, ' +
+        '<code>${weekday}</code>, <code>${weekday_short}</code>, ' +
+        '<code>${month}</code>, <code>${month_short}</code>, ' +
+        '<code>${time_of_day}</code>, <code>${season}</code>, <code>${week}</code>, <code>${quarter}</code>, ' +
+        'or any query param as <code>${name}</code>. ' +
+        'Date format tokens: <code>YYYY YY MMMM MMM MM M DD D dddd ddd HH H mm m ss s</code>.' +
+      '</p>'
+    );
+  }
+
+  function renderTitleCard(opts) {
+    var rendered = expandTokens(opts.template, opts.params, opts.now);
+    var editorId = opts.id + '-editor';
+    var html =
+      '<div class="card ' + esc(opts.kind) + '" data-card="' + esc(opts.id) + '">' +
+        '<div class="title-text" data-copy title="Click to copy">' + esc(rendered) + '</div>' +
+        '<p class="hint">Click title to copy</p>' +
+        '<div class="actions">' +
+          '<button type="button" data-action="copy">Copy</button>' +
+          '<button type="button" data-action="edit">Edit</button>' +
+          (opts.resettable ? '<button type="button" data-action="reset">Reset</button>' : '') +
+          (opts.removable ? '<button type="button" class="danger" data-action="remove">Remove</button>' : '') +
+        '</div>' +
+        '<div class="editor" id="' + esc(editorId) + '">' +
+          '<label for="' + esc(opts.id) + '-template">Template</label>' +
+          '<textarea id="' + esc(opts.id) + '-template">' + esc(opts.template) + '</textarea>' +
+          tokenHelpHtml() +
+          (opts.showDateFormat
+            ? '<label for="' + esc(opts.id) + '-date-format">Date format (query: date_format)</label>' +
+              '<input type="text" id="' + esc(opts.id) + '-date-format" value="' +
+                esc(opts.params.get('date_format') || DEFAULT_DATE_FORMAT) + '">'
+            : '') +
+          '<div class="actions">' +
+            '<button type="button" class="primary" data-action="save">Save to URL</button>' +
+            '<button type="button" data-action="cancel">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    return html;
+  }
+
+  function render() {
+    var params = getParams();
+    var now = new Date();
+    var defaultTemplate = params.has('default')
+      ? params.get('default')
+      : builtInDefaultTemplate(now);
+
+    document.getElementById('default-card').innerHTML = renderTitleCard({
+      id: 'default',
+      kind: 'default',
+      template: defaultTemplate,
+      params: params,
+      now: now,
+      showDateFormat: true,
+      resettable: true,
+      removable: false
     });
 
-    let titles = generateTitles();
-
-    if (PARAMS.has("editor")){
-        for (var t in titles){
-            var tr = document.createElement("tr");
-            tr.classList = "editor_row";
-            tr.innerHTML = `<td><span class="e_key">${t}</span></td><td><input class="e_value" id="${t}" name="${t}" type="text" value="${titles[t]}" size=50/></td>`
-            document.querySelector("#editor_table").appendChild(tr);
-        };
-        document.querySelector("#editor").style.display = "block";
-        document.querySelector("#btn_edit").style.display = "none";
+    var customs = parseCustomTitles(params);
+    var list = document.getElementById('custom-list');
+    if (!customs.length) {
+      list.innerHTML = '<p class="empty">No custom titles. Add one, or set <code>custom_titles=</code> (pipe-delimited) in the URL.</p>';
+    } else {
+      list.innerHTML = customs.map(function (tpl, i) {
+        return renderTitleCard({
+          id: 'custom-' + i,
+          kind: 'custom',
+          template: tpl,
+          params: params,
+          now: now,
+          showDateFormat: false,
+          removable: true,
+          index: i
+        });
+      }).join('');
     }
 
-    let day_key = (d.getHours() < 12) ? `${WEEKDAYS[d.getDay()].substring(0,3).toLowerCase()}_am` : `${WEEKDAYS[d.getDay()].substring(0,3).toLowerCase()}_pm`;
+    bindCardEvents();
+  }
 
-    title_span.innerText = `${d.getFullYear()}/${('0' + (d.getMonth()+1)).slice(-2)}/${('0' + d.getDate()).slice(-2)} - ${titles[day_key]}`;
-}
-        </script>
-    </head>
-    <body onload="main()">
-        <div>
-            <span style="font-size: 28pt;" id="title"></span><br>
-            <span>(CLICK THE TITLE TO COPY IT)</span>
-        </div>
-        <div id="editor" style="display:none;">
-            <table id="editor_table">
-            </table>
-            <span id="permalink" onclick="copy_link(this);">PERMALINK (click to copy)</span><br>
-            <button id="btn_save" type="button" onclick="save();">SAVE</button>
-            <button id="btn_reset" type="button" onclick="reset();">RESET</button>
-        </div>
-        <button id="btn_edit" type="button" onclick="edit();">EDIT</button>
-    </body>
+  function bindCardEvents() {
+    document.querySelectorAll('[data-card]').forEach(function (card) {
+      var id = card.getAttribute('data-card');
+      var titleEl = card.querySelector('[data-copy]');
+      var editor = card.querySelector('.editor');
+
+      function doCopy() {
+        copyText(titleEl.textContent, titleEl);
+      }
+
+      titleEl.addEventListener('click', doCopy);
+
+      card.querySelector('[data-action="copy"]').addEventListener('click', doCopy);
+
+      card.querySelector('[data-action="edit"]').addEventListener('click', function () {
+        editor.classList.add('open');
+      });
+
+      card.querySelector('[data-action="cancel"]').addEventListener('click', function () {
+        editor.classList.remove('open');
+        render();
+      });
+
+      var resetBtn = card.querySelector('[data-action="reset"]');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+          var params = getParams();
+          params.delete('default');
+          params.delete('date_format');
+          setParams(params);
+          render();
+        });
+      }
+
+      var removeBtn = card.querySelector('[data-action="remove"]');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', function () {
+          var params = getParams();
+          var titles = parseCustomTitles(params);
+          var idx = parseInt(id.replace('custom-', ''), 10);
+          if (!isNaN(idx)) {
+            titles.splice(idx, 1);
+            writeCustomTitles(params, titles);
+            setParams(params);
+            render();
+          }
+        });
+      }
+
+      card.querySelector('[data-action="save"]').addEventListener('click', function () {
+        var params = getParams();
+        var templateInput = card.querySelector('textarea');
+        var newTemplate = templateInput.value;
+
+        if (id === 'default') {
+          params.set('default', newTemplate);
+          var df = card.querySelector('#' + id + '-date-format');
+          if (df) {
+            var dfVal = df.value.trim();
+            if (dfVal && dfVal !== DEFAULT_DATE_FORMAT) params.set('date_format', dfVal);
+            else params.delete('date_format');
+          }
+        } else {
+          var titles = parseCustomTitles(params);
+          var idx = parseInt(id.replace('custom-', ''), 10);
+          if (!isNaN(idx)) {
+            titles[idx] = newTemplate;
+            writeCustomTitles(params, titles);
+          }
+        }
+
+        setParams(params);
+        render();
+      });
+    });
+  }
+
+  document.getElementById('add-custom').addEventListener('click', function () {
+    var params = getParams();
+    var titles = parseCustomTitles(params);
+    titles.push('${date} - ${weekday} ${time_of_day}');
+    writeCustomTitles(params, titles);
+    setParams(params);
+    render();
+    // Open the new card's editor
+    var last = document.querySelector('[data-card="custom-' + (titles.length - 1) + '"] .editor');
+    if (last) last.classList.add('open');
+  });
+
+  render();
+})();
+  </script>
+</body>
 </html>
