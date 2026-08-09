@@ -66,9 +66,16 @@
     }
 
     .subtitle {
-      margin: 0 0 22px;
+      margin: 0 0 16px;
       color: var(--muted);
       font-size: 0.92rem;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
     }
 
     .section {
@@ -160,6 +167,10 @@
       color: var(--danger);
     }
 
+    button.danger:hover {
+      border-color: var(--danger);
+    }
+
     .editor {
       display: none;
       margin-top: 12px;
@@ -214,12 +225,35 @@
       font-size: 0.9rem;
       padding: 8px 0;
     }
+
+    .status {
+      min-height: 1.2em;
+      margin: -10px 0 18px;
+      font-size: 0.82rem;
+      color: var(--ok);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .hidden-file {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>Stream Titles</h1>
-    <p class="subtitle">Click a title to copy. Edits update the URL query string so you can bookmark or share presets.</p>
+    <p class="subtitle" id="subtitle">Click a title to copy. Settings are saved automatically.</p>
+
+    <div class="toolbar">
+      <button type="button" id="btn-export">Export</button>
+      <button type="button" id="btn-import">Import</button>
+      <button type="button" class="danger" id="btn-reset-all">Reset all</button>
+      <input type="file" id="import-file" class="hidden-file" accept="application/json,.json">
+    </div>
+    <p class="status" id="status" aria-live="polite"></p>
 
     <section class="section" id="default-section">
       <h2 class="section-label">Default</h2>
@@ -239,10 +273,14 @@
 (function () {
   'use strict';
 
+  var COOKIE_NAME = 'stream_titles_settings';
+  var COOKIE_PROBE = 'stream_titles_cookie_probe';
+  var COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 5; // 5 years
   var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December'];
   var DEFAULT_DATE_FORMAT = 'YYYY/MM/DD';
+  var RESERVED_KEYS = { default: 1, date_format: 1, custom_titles: 1 };
 
   function esc(val) {
     return String(val == null ? '' : val)
@@ -253,26 +291,213 @@
       .replace(/'/g, '&#39;');
   }
 
-  function getParams() {
-    // Works for file:// and http(s):// — prefer location.search when present
+  function emptySettings() {
+    return { custom_titles: [] };
+  }
+
+  function normalizeSettings(raw) {
+    var settings = emptySettings();
+    if (!raw || typeof raw !== 'object') return settings;
+
+    if (typeof raw.default === 'string') settings.default = raw.default;
+    if (typeof raw.date_format === 'string') settings.date_format = raw.date_format;
+
+    if (Array.isArray(raw.custom_titles)) {
+      settings.custom_titles = raw.custom_titles.map(function (t) {
+        return t == null ? '' : String(t);
+      });
+    } else if (typeof raw.custom_titles === 'string') {
+      settings.custom_titles = raw.custom_titles ? raw.custom_titles.split('|') : [];
+    }
+
+    Object.keys(raw).forEach(function (key) {
+      if (RESERVED_KEYS[key]) return;
+      if (typeof raw[key] === 'string') settings[key] = raw[key];
+    });
+
+    return settings;
+  }
+
+  function readCookie(name) {
+    var parts = document.cookie ? document.cookie.split('; ') : [];
+    for (var i = 0; i < parts.length; i++) {
+      var eq = parts[i].indexOf('=');
+      if (eq === -1) continue;
+      var key = parts[i].slice(0, eq);
+      if (key === name) {
+        try {
+          return decodeURIComponent(parts[i].slice(eq + 1));
+        } catch (e) {
+          return parts[i].slice(eq + 1);
+        }
+      }
+    }
+    return null;
+  }
+
+  function writeCookie(name, value, maxAge) {
+    var secure = location.protocol === 'https:' ? '; Secure' : '';
+    var age = maxAge == null ? COOKIE_MAX_AGE : maxAge;
+    document.cookie = name + '=' + encodeURIComponent(value) +
+      '; path=/; max-age=' + age +
+      '; SameSite=Lax' + secure;
+  }
+
+  function clearCookie(name) {
+    document.cookie = name + '=; path=/; max-age=0; SameSite=Lax';
+  }
+
+  // Cookies generally do not work for file:// pages; probe before relying on them.
+  function cookiesAvailable() {
+    try {
+      var token = String(Date.now());
+      writeCookie(COOKIE_PROBE, token, 60);
+      var ok = readCookie(COOKIE_PROBE) === token;
+      clearCookie(COOKIE_PROBE);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var useCookies = cookiesAvailable();
+
+  function getQueryParams() {
     var search = location.search;
     if (!search && location.href.indexOf('?') !== -1) {
       search = location.href.slice(location.href.indexOf('?'));
     }
+    if (!search) return new URLSearchParams();
     return new URLSearchParams(search.charAt(0) === '?' ? search : '?' + search);
   }
 
-  function setParams(params) {
-    var qs = params.toString();
+  function settingsFromQueryParams(params) {
+    var settings = emptySettings();
+    if (params.has('default')) settings.default = params.get('default');
+    if (params.has('date_format')) settings.date_format = params.get('date_format');
+    var rawCustom = params.get('custom_titles');
+    if (rawCustom) settings.custom_titles = rawCustom.split('|');
+
+    params.forEach(function (value, key) {
+      if (RESERVED_KEYS[key]) return;
+      settings[key] = value;
+    });
+
+    return settings;
+  }
+
+  function settingsToQueryParams(settings) {
+    var params = new URLSearchParams();
+    var normalized = normalizeSettings(settings);
+
+    if (typeof normalized.default === 'string') params.set('default', normalized.default);
+    if (typeof normalized.date_format === 'string') params.set('date_format', normalized.date_format);
+    if (normalized.custom_titles && normalized.custom_titles.length) {
+      params.set('custom_titles', normalized.custom_titles.join('|'));
+    }
+
+    Object.keys(normalized).forEach(function (key) {
+      if (RESERVED_KEYS[key]) return;
+      if (typeof normalized[key] === 'string') params.set(key, normalized[key]);
+    });
+
+    return params;
+  }
+
+  function replaceUrlQuery(params) {
+    var qs = params && params.toString ? params.toString() : '';
     var base = location.href.split('?')[0].split('#')[0];
     var next = qs ? base + '?' + qs : base;
-    if (next !== location.href) {
+    if (next === location.href) return;
+    try {
+      history.replaceState(null, '', next);
+    } catch (e) {
+      // Some file:// contexts disallow replaceState — fall back to assign
       try {
-        history.replaceState(null, '', next);
-      } catch (e) {
-        // Some file:// contexts disallow replaceState — fall back to assign
         location.replace(next);
+      } catch (e2) {}
+    }
+  }
+
+  function clearQueryString() {
+    replaceUrlQuery(new URLSearchParams());
+  }
+
+  function queryHasSettings(params) {
+    var found = false;
+    params.forEach(function () { found = true; });
+    return found;
+  }
+
+  function loadSettings() {
+    if (useCookies) {
+      var cookieRaw = readCookie(COOKIE_NAME);
+      if (cookieRaw) {
+        try {
+          return normalizeSettings(JSON.parse(cookieRaw));
+        } catch (e) {
+          // Fall through to query / empty
+        }
       }
+
+      // One-time migration from query-string presets into the cookie
+      var params = getQueryParams();
+      if (queryHasSettings(params)) {
+        var migrated = settingsFromQueryParams(params);
+        saveSettings(migrated);
+        return migrated;
+      }
+
+      return emptySettings();
+    }
+
+    return settingsFromQueryParams(getQueryParams());
+  }
+
+  function saveSettings(settings) {
+    var normalized = normalizeSettings(settings);
+
+    if (useCookies) {
+      writeCookie(COOKIE_NAME, JSON.stringify(normalized));
+      clearQueryString();
+    } else {
+      replaceUrlQuery(settingsToQueryParams(normalized));
+    }
+
+    return normalized;
+  }
+
+  function clearAllSettings() {
+    clearCookie(COOKIE_NAME);
+    clearQueryString();
+  }
+
+  function updateStorageHint() {
+    var el = document.getElementById('subtitle');
+    if (!el) return;
+    if (useCookies) {
+      el.textContent = 'Click a title to copy. Settings are saved in a cookie so they persist across visits.';
+    } else {
+      el.textContent = 'Click a title to copy. Cookies are unavailable here, so settings are saved in the URL query string (bookmark or share the link to keep them).';
+    }
+  }
+
+  function getSetting(settings, key) {
+    if (!Object.prototype.hasOwnProperty.call(settings, key)) return null;
+    var val = settings[key];
+    return val == null ? null : String(val);
+  }
+
+  function setStatus(message, isError) {
+    var el = document.getElementById('status');
+    el.textContent = message || '';
+    el.className = 'status' + (isError ? ' error' : '');
+    if (message) {
+      clearTimeout(setStatus._timer);
+      setStatus._timer = setTimeout(function () {
+        el.textContent = '';
+        el.className = 'status';
+      }, 3500);
     }
   }
 
@@ -299,7 +524,6 @@
       ss: pad2(d.getSeconds()),
       s: String(d.getSeconds())
     };
-    // Longest tokens first so MMMM wins over MM/M, dddd over ddd, etc.
     return String(pattern).replace(/YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|HH|H|mm|m|ss|s/g, function (tok) {
       return map[tok];
     });
@@ -335,15 +559,14 @@
   }
 
   function builtInDefaultTemplate(d) {
-    // Preserve original Wednesday special-case when no default= override
     if (d.getDay() === 3) {
       return '${date} - ${weekday} Night Bible Study & Prayer';
     }
     return '${date} - ${weekday} ${time_of_day} Service';
   }
 
-  function expandTokens(template, params, d) {
-    var dateFormat = params.get('date_format') || DEFAULT_DATE_FORMAT;
+  function expandTokens(template, settings, d) {
+    var dateFormat = getSetting(settings, 'date_format') || DEFAULT_DATE_FORMAT;
     var builtins = {
       date: formatDate(d, dateFormat),
       weekday: WEEKDAYS[d.getDay()],
@@ -363,25 +586,9 @@
       if (Object.prototype.hasOwnProperty.call(builtins, name)) {
         return builtins[name];
       }
-      // Any other query param is available as ${name}
-      var fromQs = params.get(name);
-      return fromQs != null ? fromQs : '';
+      var fromSettings = getSetting(settings, name);
+      return fromSettings != null ? fromSettings : '';
     });
-  }
-
-  function parseCustomTitles(params) {
-    var raw = params.get('custom_titles');
-    if (!raw) return [];
-    // Pipe-delimited; keep empty slots only if user intentionally left them
-    return raw.split('|');
-  }
-
-  function writeCustomTitles(params, titles) {
-    if (!titles.length) {
-      params.delete('custom_titles');
-    } else {
-      params.set('custom_titles', titles.join('|'));
-    }
   }
 
   function copyText(text, el) {
@@ -421,14 +628,14 @@
         '<code>${weekday}</code>, <code>${weekday_short}</code>, ' +
         '<code>${month}</code>, <code>${month_short}</code>, ' +
         '<code>${time_of_day}</code>, <code>${season}</code>, <code>${week}</code>, <code>${quarter}</code>, ' +
-        'or any query param as <code>${name}</code>. ' +
+        'or any saved setting key as <code>${name}</code>. ' +
         'Date format tokens: <code>YYYY YY MMMM MMM MM M DD D dddd ddd HH H mm m ss s</code>.' +
       '</p>'
     );
   }
 
   function renderTitleCard(opts) {
-    var rendered = expandTokens(opts.template, opts.params, opts.now);
+    var rendered = expandTokens(opts.template, opts.settings, opts.now);
     var editorId = opts.id + '-editor';
     var html =
       '<div class="card ' + esc(opts.kind) + '" data-card="' + esc(opts.id) + '">' +
@@ -445,12 +652,12 @@
           '<textarea id="' + esc(opts.id) + '-template">' + esc(opts.template) + '</textarea>' +
           tokenHelpHtml() +
           (opts.showDateFormat
-            ? '<label for="' + esc(opts.id) + '-date-format">Date format (query: date_format)</label>' +
+            ? '<label for="' + esc(opts.id) + '-date-format">Date format</label>' +
               '<input type="text" id="' + esc(opts.id) + '-date-format" value="' +
-                esc(opts.params.get('date_format') || DEFAULT_DATE_FORMAT) + '">'
+                esc(getSetting(opts.settings, 'date_format') || DEFAULT_DATE_FORMAT) + '">'
             : '') +
           '<div class="actions">' +
-            '<button type="button" class="primary" data-action="save">Save to URL</button>' +
+            '<button type="button" class="primary" data-action="save">Save</button>' +
             '<button type="button" data-action="cancel">Cancel</button>' +
           '</div>' +
         '</div>' +
@@ -459,34 +666,34 @@
   }
 
   function render() {
-    var params = getParams();
+    var settings = loadSettings();
     var now = new Date();
-    var defaultTemplate = params.has('default')
-      ? params.get('default')
+    var defaultTemplate = Object.prototype.hasOwnProperty.call(settings, 'default')
+      ? settings.default
       : builtInDefaultTemplate(now);
 
     document.getElementById('default-card').innerHTML = renderTitleCard({
       id: 'default',
       kind: 'default',
       template: defaultTemplate,
-      params: params,
+      settings: settings,
       now: now,
       showDateFormat: true,
       resettable: true,
       removable: false
     });
 
-    var customs = parseCustomTitles(params);
+    var customs = settings.custom_titles || [];
     var list = document.getElementById('custom-list');
     if (!customs.length) {
-      list.innerHTML = '<p class="empty">No custom titles. Add one, or set <code>custom_titles=</code> (pipe-delimited) in the URL.</p>';
+      list.innerHTML = '<p class="empty">No custom titles yet. Add one below.</p>';
     } else {
       list.innerHTML = customs.map(function (tpl, i) {
         return renderTitleCard({
           id: 'custom-' + i,
           kind: 'custom',
           template: tpl,
-          params: params,
+          settings: settings,
           now: now,
           showDateFormat: false,
           removable: true,
@@ -524,10 +731,11 @@
       var resetBtn = card.querySelector('[data-action="reset"]');
       if (resetBtn) {
         resetBtn.addEventListener('click', function () {
-          var params = getParams();
-          params.delete('default');
-          params.delete('date_format');
-          setParams(params);
+          var settings = loadSettings();
+          delete settings.default;
+          delete settings.date_format;
+          saveSettings(settings);
+          setStatus('Default title reset.');
           render();
         });
       }
@@ -535,58 +743,113 @@
       var removeBtn = card.querySelector('[data-action="remove"]');
       if (removeBtn) {
         removeBtn.addEventListener('click', function () {
-          var params = getParams();
-          var titles = parseCustomTitles(params);
+          var settings = loadSettings();
+          var titles = settings.custom_titles.slice();
           var idx = parseInt(id.replace('custom-', ''), 10);
           if (!isNaN(idx)) {
             titles.splice(idx, 1);
-            writeCustomTitles(params, titles);
-            setParams(params);
+            settings.custom_titles = titles;
+            saveSettings(settings);
             render();
           }
         });
       }
 
       card.querySelector('[data-action="save"]').addEventListener('click', function () {
-        var params = getParams();
+        var settings = loadSettings();
         var templateInput = card.querySelector('textarea');
         var newTemplate = templateInput.value;
 
         if (id === 'default') {
-          params.set('default', newTemplate);
+          settings.default = newTemplate;
           var df = card.querySelector('#' + id + '-date-format');
           if (df) {
             var dfVal = df.value.trim();
-            if (dfVal && dfVal !== DEFAULT_DATE_FORMAT) params.set('date_format', dfVal);
-            else params.delete('date_format');
+            if (dfVal && dfVal !== DEFAULT_DATE_FORMAT) settings.date_format = dfVal;
+            else delete settings.date_format;
           }
         } else {
-          var titles = parseCustomTitles(params);
+          var titles = settings.custom_titles.slice();
           var idx = parseInt(id.replace('custom-', ''), 10);
           if (!isNaN(idx)) {
             titles[idx] = newTemplate;
-            writeCustomTitles(params, titles);
+            settings.custom_titles = titles;
           }
         }
 
-        setParams(params);
+        saveSettings(settings);
+        setStatus('Saved.');
         render();
       });
     });
   }
 
   document.getElementById('add-custom').addEventListener('click', function () {
-    var params = getParams();
-    var titles = parseCustomTitles(params);
+    var settings = loadSettings();
+    var titles = settings.custom_titles.slice();
     titles.push('${date} - ${weekday} ${time_of_day}');
-    writeCustomTitles(params, titles);
-    setParams(params);
+    settings.custom_titles = titles;
+    saveSettings(settings);
     render();
-    // Open the new card's editor
     var last = document.querySelector('[data-card="custom-' + (titles.length - 1) + '"] .editor');
     if (last) last.classList.add('open');
   });
 
+  document.getElementById('btn-export').addEventListener('click', function () {
+    var settings = loadSettings();
+    var blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'stream_titles_settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus('Settings exported.');
+  });
+
+  document.getElementById('btn-import').addEventListener('click', function () {
+    document.getElementById('import-file').click();
+  });
+
+  document.getElementById('import-file').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(String(reader.result || ''));
+        var settings = normalizeSettings(parsed);
+        saveSettings(settings);
+        setStatus('Settings imported.');
+        render();
+      } catch (err) {
+        setStatus('Import failed: invalid JSON file.', true);
+      }
+    };
+    reader.onerror = function () {
+      setStatus('Import failed: could not read file.', true);
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('btn-reset-all').addEventListener('click', function () {
+    var confirmed = window.confirm(
+      'Reset all settings?\n\n' +
+      'This will clear all saved titles, date format, and custom settings, ' +
+      'and restore everything to the built-in defaults. This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    clearAllSettings();
+    setStatus('All settings cleared. Defaults restored.');
+    render();
+  });
+
+  updateStorageHint();
   render();
 })();
   </script>
