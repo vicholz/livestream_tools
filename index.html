@@ -71,6 +71,24 @@
       font-size: 0.92rem;
     }
 
+    .app-version {
+      margin: -10px 0 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      overflow-wrap: anywhere;
+    }
+
+    .app-version a {
+      color: inherit;
+      font-family: var(--mono);
+      text-underline-offset: 2px;
+    }
+
+    .app-version a:hover {
+      color: var(--accent);
+    }
+
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -246,6 +264,7 @@
   <main>
     <h1>Stream Titles</h1>
     <p class="subtitle" id="subtitle">Click a title to copy. Settings are saved automatically.</p>
+    <p class="app-version" id="app-version" hidden></p>
 
     <div class="toolbar">
       <button type="button" id="btn-export">Export</button>
@@ -852,6 +871,39 @@
   updateStorageHint();
   render();
 })();
+
+    const APP_REPO = "vicholz/livestream_tools";
+    const APP_VERSION_FALLBACK_SHA = "8ce50a23fd680350da56c65b2166643ec660a113";
+
+    function renderAppVersion(sha) {
+      const el = document.querySelector("#app-version");
+      if (!el || !sha) return;
+      el.replaceChildren();
+      el.append("Version ");
+      const a = document.createElement("a");
+      a.href = "https://github.com/" + APP_REPO + "/commit/" + sha;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = sha.slice(0, 7);
+      a.title = "View the diff for this version";
+      el.appendChild(a);
+      el.hidden = false;
+    }
+
+    function loadAppVersion() {
+      renderAppVersion(APP_VERSION_FALLBACK_SHA);
+      fetch("https://api.github.com/repos/" + APP_REPO + "/commits/main")
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.status);
+          return res.json();
+        })
+        .then(function (commit) {
+          if (commit.sha) renderAppVersion(commit.sha);
+        })
+        .catch(function () {});
+    }
+
+    loadAppVersion();
   </script>
 </body>
 </html>
