@@ -873,7 +873,6 @@
 })();
 
     const APP_REPO = "vicholz/livestream_tools";
-    const APP_VERSION_FALLBACK_SHA = "8ce50a23fd680350da56c65b2166643ec660a113";
 
     function renderAppVersion(sha) {
       const el = document.querySelector("#app-version");
@@ -891,7 +890,6 @@
     }
 
     function loadAppVersion() {
-      renderAppVersion(APP_VERSION_FALLBACK_SHA);
       fetch("https://api.github.com/repos/" + APP_REPO + "/commits/main")
         .then(function (res) {
           if (!res.ok) throw new Error(res.status);
